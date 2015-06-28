@@ -1,0 +1,335 @@
+<!DOCTYPE HTML>
+<html>
+	<!-- I confirm that this coursework submission is entirely my own work, except where explicitly stated otherwise. -->
+	<!-- Student Name: Sergio Lamela | Student Number: 12944473 | Internet and Web Technologies Coursework 1 -->
+	<!-- URL of html in my dcs personal webspace: http://titan.dcs.bbk.ac.uk/~slamel01/WimbledonResults.html --> 
+	<head>
+		<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+		<meta charset="utf-8" />
+		<!-- The functions that are used by the web-page are contained in the following script -->
+		<script type="text/javascript">
+			/*
+			*The following is a function for loading an XML document 
+			*/
+			function getXML(myUrl) {
+ 				var xhr = $.ajax({
+              			url:      myUrl,
+              			datatype: "xml",
+              			async:    false
+              			});
+  				return xhr.responseXML;
+			}
+			
+			/*
+			*This function is called when a user selects 'Submit'. It filters the results table based on how the user has filled in the form
+			*and then displays the results on the right side of the web-page 
+			*/
+			function processForm(){
+				//First clears the right side of the web-page to add the results into. Otherwise, every time the user 
+				//does a new search, the results would be added underneath previous result tables.  
+				resetTable();
+				if (validateInput() == false){return;} // if the user has not entered the form correctly, don't continue processing.
+				if (document.userInput.gender[0].checked){ //checks whether the user has selected to view the male or female results 
+					addResults("wimbledon-men-2013.xml");  // then applies the appropriate stylesheet 
+				}
+				else{
+					addResults("wimbledon-women-2013.xml")
+				}
+				filterPlayerNames(); //filter the results table by player names based on how the user has filled in the form 
+				filterNumberOfSets(); //filter the results table by the number of sets entered by the user 
+				filterNumberOfRounds(); //filter the results table by the number of rounds entered by the user 
+			}
+			
+			/*
+			*Error handling code. If a user has chosen to filter results by number of sets or rounds, this method ensures
+			*the user has entered an integer before proceeding. 
+			*/
+			function validateInput(){
+				var setsValue = $("#numberOfSets").val(); //number of sets entered by the user
+				var roundsValue = $("#numberOfRounds").val(); //number of rounds entered by the user 
+				//Makes sure an integer number has been inserted. 
+				if($('#setsSelection').val() != 'none' && ( (isNaN(setsValue)) == true || parseFloat(setsValue) % 1 != 0 ) ){//decimals and non-numbers not allowed
+					alert("Please enter a valid integer for number of sets");
+					return false;
+				}
+				else if($('#roundSelection').val() != 'none' && ( (isNaN(roundsValue)) == true || parseFloat(roundsValue) % 1 != 0 ) ){
+					alert("Please enter a valid integer for number of rounds");
+					return false;
+				}
+				return true; //if no errors, the method returns true and processing the form can go ahead
+			}
+			
+			/*
+			*This function gets the appropriate XML document depending on whether the user has selected to view the male or female results.
+			*It then loads the XSL stylesheet and applies it to the XML. It then appends the document to the right side of the web-page 
+			*/
+			function addResults(menOrWoman){
+				var result;
+				var xmlDoc = getXML(menOrWoman);
+				var stylesheet = getXML("WimbledonStyleSheet.xsl");
+				sortTable(stylesheet); //sorts the table ascending or descending 
+				if (typeof (XSLTProcessor) != "undefined") {
+					var processor = new XSLTProcessor();
+					processor.importStylesheet(stylesheet);
+					var result = processor.transformToFragment(xmlDoc, document);	
+					$("#rightSide").append('<h5>Every 2 rows represent a single match. The winner is in bold</h5>');
+					$("#rightSide").append(result);
+					
+				} else{
+					window.alert("Your browser does not support the XSLTProcessor object");
+					}
+			}
+			
+			/*
+			* Sorts the results table ascending or descending depending on users selection
+			*/
+			function sortTable(stylesheet1){
+				var sel = document.getElementById("sortSelector");
+				var selected = sel.options[sel.selectedIndex].value;
+				switch(selected){
+				case 'Asc': //result table is already sorted in ascending order by default. So return from the function as nothing needs to be done. 
+					return;
+				case 'Desc' : //change the stylesheet to sort descending then return. 
+					$(stylesheet1).find("xsl\\:sort, sort").first().attr("order","descending");
+					return;
+				}
+			}
+			
+			/*
+			*This function filters the results table based on the String entered by the user and whether 
+			*they have selected 'contains' or 'equals'
+			*/
+			function filterPlayerNames(){
+				var filterType;
+				//Check if the user has chosen to filter the results by player name. If so, does the appropriate filtering. Otherwise returns. 
+				var sel = document.getElementById("selectPlayerOptions");
+				var selected = sel.options[sel.selectedIndex].value;
+				switch (selected){
+					case 'none' : //user has chosen not to filter results by player name so returns from this function 
+						return;
+					case 'equals': //user has chosen to filter results based on an exact name match
+						filterType = 'equals';
+						break;
+					case 'contains': //user has chosen to filter by substring 
+						filterType = 'contains';
+						break;
+				}
+				
+				var resultTable = document.getElementById("2013"); //'2013' is the id given to the results table during the XSL transformation
+				var inputtedName = document.getElementById("playerName").value; //gets the String the user wants to filter the results with 
+				//The player names in the table can be plain or bold if the player won. Therefore 2 variables are needed for comparison purposes
+				var input = '<b>' + inputtedName + '</b>'; 
+				var input2 = inputtedName;
+				var count = 0; //variable to make sure rows are only deleted once both player names in a match have been tested. 
+				//count = 0 signifies the first player in a match is being tested. count = 1 signifies the second player is being tested 
+		
+				
+				//iterate through the table rows, comparing the player names with the user input
+				//for loop starts at row 1 as row 0 contains headings. 
+				for (var x=1; x < resultTable.rows.length;){ 
+					if ((filterType == "equals") && (resultTable.rows[x].cells[1].innerHTML != input && resultTable.rows[x].cells[1].innerHTML != input2) || 
+						(filterType == 'contains' &&(resultTable.rows[x].cells[1].innerHTML.indexOf(input) == -1 && resultTable.rows[x].cells[1].innerHTML.indexOf(input2) == -1))){
+						if (count == 0){ //check the other player in the match before deleting any rows
+							count = 1;
+							x += 1;
+						}
+						else if(count == 1){ //checked both players in the match so both rows can now be deleted as neither matched the user input 
+							x-=1; //go back once as need to delete both rows for the match 
+							resultTable.deleteRow(x);
+							resultTable.deleteRow(x);
+							count = 0;
+						}
+					}
+					else{ //a player name has been found matching the criteria so this match can be kept 
+						if(count == 0){
+							x += 2; //can skip testing the next row as it is part of the same match 
+						}
+						else{ //when count = 1. 
+							x+= 1;
+							count = 0;
+						}
+					}
+				}
+			}
+			
+			
+			/**
+			* This function filters the results table by the criteria for number of sets entered by the user 
+			*/
+			function filterNumberOfSets(){
+				var filterType;
+				var sel = document.getElementById("setsSelection");
+				var selected = sel.options[sel.selectedIndex].value;
+				switch (selected){
+					case 'none' : //user has chosen not to filter results by sets so returns from this function 
+						return;
+					case 'equals': //user has chosen to filter results based on exact number of sets 
+						filterType = 'equals';
+						break;
+					case 'greaterThan': //user has chosen to filter by number of sets greater than an inserted value 
+						filterType = 'greaterThan';
+						break;
+					case 'lessThan': //user has chosen to filter by number of sets less than an inserted value 
+						filterType = 'lessThan';
+						break;
+				}
+		
+				//numberOfSets: the number of sets entered by the user + 2 (round and player columns). Variable to determine the length of the row
+				var numberOfSets = parseInt(document.getElementById('numberOfSets').value) + 2; 
+				var resultTable = document.getElementById("2013"); //'2013' is the id given to the results table during the XSL transformation
+				
+				//Iterate through the table and delete the rows that do not match the criteria entered by the user 
+				for (var x=1; x < resultTable.rows.length;){						
+					if (((filterType == 'equals') && (resultTable.rows[x].cells.length == numberOfSets)) ||
+						((filterType == 'greaterThan') && (resultTable.rows[x].cells.length > numberOfSets)) ||
+						((filterType == 'lessThan') && (resultTable.rows[x].cells.length < numberOfSets))){
+							x++; //length of the row means the number of sets is the same as that inputted by user  
+					}
+					else{
+						resultTable.deleteRow(x); //delete the row as it does not fulfil the criteria entered by the user 
+					}
+				}
+			}
+			
+			/*
+			*Function to filter the results table based on the criteria for number of rounds entered by the user 
+			*/
+			function filterNumberOfRounds(){
+				var filterType;
+				var sel = document.getElementById("roundSelection");
+				var selected = sel.options[sel.selectedIndex].value;
+				switch (selected){
+					case 'none' : //user has chosen not to filter results by round so returns from this function 
+						return;
+					case 'equals': //user has chosen to filter results based on exact number of rounds  
+						filterType = 'equals';
+						break;
+					case 'greaterThan': //user has chosen to filter by number of rounds greater than an inserted value 
+						filterType = 'greaterThan';
+						break;
+					case 'lessThan': //user has chosen to filter by number of rounds less than an inserted value 
+						filterType = 'lessThan';
+						break;
+				}
+				var numberOfRounds = parseInt(document.getElementById('numberOfRounds').value);
+				var resultTable = document.getElementById("2013"); //'2013' is the id given to the results table during the XSL transformation
+				
+				//Iterate through the results table and delete the rows that do not fulfil the user entered criteria for round number 
+				for (var x=1; x < resultTable.rows.length;){						
+					if (((filterType == 'equals') && (resultTable.rows[x].cells[0].innerHTML == numberOfRounds))||
+						((filterType == 'greaterThan') && (resultTable.rows[x].cells[0].innerHTML > numberOfRounds)) ||
+						((filterType == 'lessThan') && (resultTable.rows[x].cells[0].innerHTML < numberOfRounds))){
+							x++; //number of rounds is correct for this row so move onto next one 
+					}
+					else{
+						resultTable.deleteRow(x); //delete the row as it does not fulfil the criteria entered by the user 
+					}
+				}
+			}
+			
+			//This function clears the right side of the web-page 
+			function resetTable(){
+				$("#rightSide").empty();
+				$("#rightSide").append('<h2>Search Results</h2>'); //adds a heading above where the search results will go. 
+				
+			}
+		</script>
+		<!-- All the CSS for the web-page is contained in the following style tags --> 
+		<style>
+			#wholePage{ 
+				width:100%;overflow:auto;
+			}
+			#leftSide{
+				float:left;
+				width:50%;
+			}
+			#rightSide{
+				float:right;
+				width:50%;
+			}
+			h1{
+				text-align: center;
+				color:red;
+			}
+			h2{
+				text-align:left;
+				color:blue;
+			}
+			h5{
+				color: red;
+			}
+			table {
+				border=1px solid black;
+			}
+			form {	
+				margin: 30px; 
+			}
+			input { 
+				margin-bottom: 20px;
+			}
+			button{margin: 10px;}
+		</style>
+		<title>2013 Wimbledon Results Database</title>
+	</head>
+
+	<body>
+		<h1>2013 Wimbledon Results Online Database</h1>
+		<!-- the whole page is divided into a left side containing the form for user input and right side where the results will be displayed --> 
+		<div id="wholePage">
+			<div id="rightSide">
+				<h2>Search Results</h2>
+			</div>
+			<div id="leftSide">
+				<!-- The following is the form the user will fill in to filter the results table -->
+				<form name="userInput">
+					<input type="radio" name="gender" value="male" checked>View Male Tennis Results
+					<input type="radio" name="gender" value="female">View Female Tennis Results
+		
+					<br/>
+					
+					<label>Find tennis matches where the name of 1 of the players</label> <br/>
+					<select id="selectPlayerOptions" name="selectPlayer">
+						<option value="none">Don't filter by Player Name</option>
+						<option value="contains">contains</option>
+						<option value="equals">equals</option>
+					</select> 
+					<input type="text" id="playerName" value="Insert name here">
+					<br/>
+					<label>Find tennis matches where the number of sets</label> <br/>
+					<select id="setsSelection">
+						<option value="none">Don't filter by number of sets</option>
+						<option value="equals">Equals</option>
+						<option value="greaterThan">is greater than</option>
+						<option value="lessThan">is less than </option>
+					</select> 
+					<input type="text" id="numberOfSets" >
+					<br/>
+					<label>Find tennis matches where the round number is</label> <br/>
+					<select id="roundSelection" >
+						<option value="none">Don't filter by round number</option>
+						<option value="equals">Equals</option>
+						<option value="greaterThan">is greater than</option>
+						<option value="lessThan">is less than </option>
+					</select> 
+					<input type="text" id="numberOfRounds">
+					<br/>
+					<label>Sort results by round number </label>
+					<select id="sortSelector" name="sortMethod">
+						<option value="Asc">Ascending</option>
+						<option value="Desc">Descending</option>
+					</select>
+					<br/>
+					<button type="button" onClick="processForm()">
+						Submit
+					</button>
+					<br/>
+					<button type="reset" onClick="resetTable()">
+						Clear Table
+					</button>
+				</form>
+				<br/>
+			</div>
+		
+		</div>
+	</body>
+</html>
